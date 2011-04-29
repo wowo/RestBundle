@@ -45,6 +45,11 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
     private $defaultNormalizers;
 
     /**
+     * @var Boolean If the defaultNormalizers have been loaded
+     */
+    private $defaultNormalizersLoaded = false;
+
+    /**
      * Set the array maps to enable lazy loading of normalizers and encoders
      *
      * @param array $encoderFormatMap The key is the class name, the value the name of the service
@@ -73,14 +78,20 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
      */
     public function normalizeObject($object, $format, $properties = null)
     {
-        try {
-            return parent::normalizeObject($object, $format, $properties);
-        } catch (\Exception $e) {
-            $class = get_class($object);
-            if (!$this->lazyLoadNormalizer($class)) {
-                throw $e;
-            }
+        $class = get_class($object);
+        if (isset($this->normalizerCache[$class][$format])) {
+            return $this->normalizerCache[$class][$format]->normalize($object, $format, $properties);
         }
+
+        if (isset($this->normalizerClassMap[$class])) {
+            // Assume configured normalizerClassMap normalizer supports the given class
+            $normalizer = $this->container->get($this->normalizerClassMap[$class]);
+            $this->addNormalizer($normalizer);
+            $this->normalizerCache[$class][$format] = $normalizer;
+            return $normalizer->normalize($object, $format, $properties);
+        }
+
+        $this-loadDefaultNormalizer();
 
         return parent::normalizeObject($object, $format, $properties);
     }
@@ -90,47 +101,35 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
      */
     public function denormalizeObject($data, $class, $format = null)
     {
-        try {
-            return parent::denormalizeObject($data, $class, $format);
-        } catch (\Exception $e) {
-            if (!$this->lazyLoadNormalizer($class)) {
-                throw $e;
-            }
+        if (isset($this->normalizerCache[$class][$format])) {
+            return $this->normalizerCache[$class][$format]->denormalize($data, $class, $format);
         }
+
+        if (isset($this->normalizerClassMap[$class])) {
+            // Assume configured normalizerClassMap normalizer supports the given class
+            $normalizer = $this->container->get($this->normalizerClassMap[$class]);
+            $this->addNormalizer($normalizer);
+            $this->normalizerCache[$class][$format] = $normalizer;
+            return $normalizer->denormalize($data, $class, $format);
+        }
+
+        $this-loadDefaultNormalizer();
 
         return parent::denormalizeObject($data, $class, $format);
     }
 
     /**
-     * Lazy load a normalizer for the given class, as well as ensure that
-     * the default normalizers are loaded
-     *
-     * @param string $class A fully qualified class name
-     *
-     * @return Boolean If the normalizer was successfully lazy loaded
+     * Lazy load the default normalizers
      */
-    private function lazyLoadNormalizer($class)
+    private function loadDefaultNormalizer()
     {
-        $normalizer_loaded = false;
-        $default_loaded = count($this->getNormalizers());
-
-        if (isset($this->normalizerClassMap[$class])
-            && $this->container->has($this->normalizerClassMap[$class])
-        ) {
-            $this->addNormalizer($this->container->get($this->normalizerClassMap[$class]));
-
-            $normalizer_loaded = true;
-        }
-
-        if (!$default_loaded && !empty($this->defaultNormalizers)) {
+        if (!$this->defaultNormalizersLoaded && !empty($this->defaultNormalizers)) {
             foreach ($this->defaultNormalizers as $normalizer) {
                 $this->addNormalizer($this->container->get($normalizer));
             }
 
-            $normalizer_loaded = true;
+            $this->defaultNormalizersLoaded = true;
         }
-
-        return $normalizer_loaded;
     }
 
     /**
