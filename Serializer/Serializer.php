@@ -91,7 +91,7 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
             return $normalizer->normalize($object, $format, $properties);
         }
 
-        $this-loadDefaultNormalizer();
+        $this->loadDefaultNormalizers();
 
         return parent::normalizeObject($object, $format, $properties);
     }
@@ -113,7 +113,7 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
             return $normalizer->denormalize($data, $class, $format);
         }
 
-        $this-loadDefaultNormalizer();
+        $this->loadDefaultNormalizers();
 
         return parent::denormalizeObject($data, $class, $format);
     }
@@ -121,9 +121,9 @@ class Serializer extends BaseSerializer implements ContainerAwareInterface
     /**
      * Lazy load the default normalizers
      */
-    private function loadDefaultNormalizer()
+    private function loadDefaultNormalizers()
     {
-        if (!$this->defaultNormalizersLoaded && !empty($this->defaultNormalizers)) {
+        if (!$this->defaultNormalizersLoaded) {
             foreach ($this->defaultNormalizers as $normalizer) {
                 $this->addNormalizer($this->container->get($normalizer));
             }
